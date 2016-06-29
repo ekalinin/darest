@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	_ "github.com/lib/pq"
 
@@ -20,7 +21,8 @@ var dbUser = flag.String("db-user", "postgres", "Database user")
 var dbPass = flag.String("db-pass", "postgres", "Database user's password")
 var dbName = flag.String("db-dbname", "template0", "Database name")
 
-//var port = flag.Int("port", "127.0.0.1", "http port")
+var port = flag.Int("port", 7788, "Public http port")
+
 //var host = flag.Int("host", 7788, "http host")
 //var host = flag.Int("host", 7788, "http host")
 
@@ -35,6 +37,44 @@ var dbName = flag.String("db-dbname", "template0", "Database name")
 //         log.Panic(err)
 //     }
 // }
+
+func select2map(db *sql.DB, query string) ([]map[string]interface{}, error) {
+	tableData := make([]map[string]interface{}, 0)
+
+	rows, err := db.Query(query)
+	if err != nil {
+		return tableData, err
+	}
+	defer rows.Close()
+	columns, err := rows.Columns()
+	if err != nil {
+		return tableData, err
+	}
+	count := len(columns)
+	values := make([]interface{}, count)
+	valuePtrs := make([]interface{}, count)
+	for rows.Next() {
+		for i := 0; i < count; i++ {
+			valuePtrs[i] = &values[i]
+		}
+		rows.Scan(valuePtrs...)
+		entry := make(map[string]interface{})
+		for i, col := range columns {
+			var v interface{}
+			val := values[i]
+			b, ok := val.([]byte)
+			if ok {
+				v = string(b)
+			} else {
+				v = val
+			}
+			entry[col] = v
+		}
+		tableData = append(tableData, entry)
+	}
+	return tableData, nil
+
+}
 
 func main() {
 
@@ -84,7 +124,21 @@ func main() {
 
 	// collection level
 	e.GET("/:collection/", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, "GET-collection\n")
+		rows, err := select2map(db, "select * from "+c.Param("collection"))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, rows)
+	})
+	e.OPTIONS("/:collection/", func(c echo.Context) error {
+		rows, err := select2map(db, "select table_name, column_name, "+
+			"ordinal_position, column_default, is_nullable, data_type, "+
+			"is_identity, is_updatable from information_schema.columns "+
+			" where table_name = '"+c.Param("collection")+"'")
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, rows)
 	})
 	e.POST("/:collection/", func(c echo.Context) error {
 		return c.JSON(http.StatusCreated, "POST-collection\n")
@@ -102,5 +156,5 @@ func main() {
 	})
 
 	// Start server
-	e.Run(standard.New(":7788"))
+	e.Run(standard.New(":" + strconv.Itoa(*port)))
 }
