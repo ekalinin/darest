@@ -14,7 +14,6 @@ import (
 	"github.com/labstack/echo/middleware"
 )
 
-// https://habrahabr.ru/post/197718/
 var dbHost = flag.String("db-host", "localhost", "Database hostname")
 var dbPort = flag.Int("db-port", 5432, "Database port")
 var dbUser = flag.String("db-user", "postgres", "Database user")
@@ -22,21 +21,6 @@ var dbPass = flag.String("db-pass", "postgres", "Database user's password")
 var dbName = flag.String("db-dbname", "template0", "Database name")
 
 var port = flag.Int("port", 7788, "Public http port")
-
-//var host = flag.Int("host", 7788, "http host")
-//var host = flag.Int("host", 7788, "http host")
-
-// func InitDB(dataSourceName string) {
-//     var err error
-//     db, err = sql.Open("postgres", dataSourceName)
-//     if err != nil {
-//         log.Panic(err)
-//     }
-
-//     if err = db.Ping(); err != nil {
-//         log.Panic(err)
-//     }
-// }
 
 func select2map(db *sql.DB, query string) ([]map[string]interface{}, error) {
 	tableData := make([]map[string]interface{}, 0)
@@ -87,7 +71,7 @@ func main() {
 	defer db.Close()
 
 	if err != nil {
-		fmt.Printf("Database opening error -->%v\n", err)
+		fmt.Printf("Database opening error: %v\n", err)
 		panic("Database error")
 	}
 
@@ -100,26 +84,14 @@ func main() {
 
 	// meta
 	e.GET("/", func(c echo.Context) error {
-		var resp struct {
-			Collections []string `json:"collections"`
-		}
-		rows, err := db.Query(
-			"SELECT table_name FROM information_schema.tables " +
+		rows, err := select2map(db,
+			"SELECT table_name as name, table_type as type "+
+				"FROM information_schema.tables "+
 				" WHERE table_schema = 'public'")
 		if err != nil {
 			return err
 		}
-		defer rows.Close()
-		var tName string
-		for rows.Next() {
-			err := rows.Scan(&tName)
-			if err != nil {
-				return err
-			}
-			resp.Collections = append(resp.Collections, tName)
-		}
-
-		return c.JSON(http.StatusOK, resp)
+		return c.JSON(http.StatusOK, rows)
 	})
 
 	// collection level
@@ -154,6 +126,8 @@ func main() {
 	e.DELETE("/:collection/:id/", func(c echo.Context) error {
 		return c.JSON(http.StatusCreated, "DELETE-entity\n")
 	})
+
+	println("Server started on port: " + strconv.Itoa(*port))
 
 	// Start server
 	e.Run(standard.New(":" + strconv.Itoa(*port)))
