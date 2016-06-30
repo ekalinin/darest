@@ -66,7 +66,8 @@ build:
 		-o ${EXEC} ./main.go
 
 run:
-	./restius -db-dbname postgres -db-host 172.17.0.1 \
+	# curl -s http://localhost:7788/festival | python -mjson.tool
+	./restius -db-dbname postgres -db-host 172.17.0.1 -port 7788 \
 		-db-pass postgres -db-port 5432 -db-user postgres
 #
 # Utils
