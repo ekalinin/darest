@@ -1,6 +1,6 @@
 .PHONY: env build
 
-NAME=restius
+NAME=darest
 EXEC=${NAME}
 GOVER=1.6.2
 ENVNAME=${NAME}${GOVER}
@@ -50,34 +50,35 @@ fix-paths:
 	fi
 
 tools:
-	@go get -u -v github.com/nsf/gocode
-	@go get -u -v github.com/rogpeppe/godef
-	@go get -u -v github.com/golang/lint/golint
+	@go get -v github.com/nsf/gocode
+	@go get -v github.com/rogpeppe/godef
+	@go get -v github.com/golang/lint/golint
 	#@go get -u -v github.com/lukehoban/go-find-references
-	@go get -u -v github.com/lukehoban/go-outline
-	@go get -u -v sourcegraph.com/sqs/goreturns
-	@go get -u -v golang.org/x/tools/cmd/gorename
-	@go get -u -v github.com/tpng/gopkgs
-	@go get -u -v github.com/newhook/go-symbols
+	@go get -v github.com/lukehoban/go-outline
+	@go get -v sourcegraph.com/sqs/goreturns
+	@go get -v golang.org/x/tools/cmd/gorename
+	@go get -v github.com/tpng/gopkgs
+	@go get -v github.com/newhook/go-symbols
 
 build:
 	@go build -a -tags netgo \
 		--ldflags '-s -extldflags "-lm -lstdc++ -static"' \
 		-o ${EXEC} ./main.go
 
-run:
-	# curl -s http://localhost:7788/festival | python -mjson.tool
-	./restius -db-dbname postgres -db-host 172.17.0.1 -port 7788 \
-		-db-pass postgres -db-port 5432 -db-user postgres
 #
 # Utils
 #
-run-pg:
+start-pg:
 	# psql -h 172.17.0.1 -d postgres -U postgres -W
-	sudo docker run -p 5432:5432 --name postgres-db -d postgres:latest
+	# sudo docker run -p 5432:5432 --name postgres-db -d postgres:latest
+	docker start postgres-db
 
-example-db:
-	# docker start postgres-db
+start:
+	# curl -s http://localhost:7788/festival | python -mjson.tool
+	./${NAME} -db-dbname postgres -db-host 172.17.0.1 -port 7788 \
+		-db-pass postgres -db-port 5432 -db-user postgres
+
+import-db:
 	psql -h 172.17.0.1 -d postgres -U postgres -W \
 		-c "\copy festival from './examples/films/data/festival.csv' DELIMITER ',' CSV HEADER;"
 	psql -h 172.17.0.1 -d postgres -U postgres -W \ 
