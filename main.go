@@ -83,7 +83,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// meta
-	e.GET("/", func(c echo.Context) error {
+	e.OPTIONS("/", func(c echo.Context) error {
 		rows, err := select2map(db,
 			"SELECT table_name as name, table_type as type "+
 				"FROM information_schema.tables "+
@@ -103,14 +103,21 @@ func main() {
 		return c.JSON(http.StatusOK, rows)
 	})
 	e.OPTIONS("/:collection/", func(c echo.Context) error {
-		rows, err := select2map(db, "select table_name, column_name, "+
-			"ordinal_position, column_default, is_nullable, data_type, "+
-			"is_identity, is_updatable from information_schema.columns "+
+		var resp struct {
+			Pkey    []string                 `json:"pkey"`
+			Columns []map[string]interface{} `json:"columns"`
+		}
+		resp.Pkey = []string{"id"}
+		resp.Columns, err = select2map(db, "select column_name as name, "+
+			"ordinal_position as position, column_default as default, "+
+			"is_nullable as nullable, data_type as type, "+
+			"is_updatable as updatable "+
+			"from information_schema.columns "+
 			" where table_name = '"+c.Param("collection")+"'")
 		if err != nil {
 			return err
 		}
-		return c.JSON(http.StatusOK, rows)
+		return c.JSON(http.StatusOK, &resp)
 	})
 	e.POST("/:collection/", func(c echo.Context) error {
 		return c.JSON(http.StatusCreated, "POST-collection\n")
