@@ -107,6 +107,7 @@ func main() {
 			Pkey    []string                 `json:"pkey"`
 			Columns []map[string]interface{} `json:"columns"`
 		}
+		// TODO: select column list for pk
 		resp.Pkey = []string{"id"}
 		resp.Columns, err = select2map(db, "select column_name as name, "+
 			"ordinal_position as position, column_default as default, "+
@@ -125,7 +126,13 @@ func main() {
 
 	// entity level
 	e.GET("/:collection/:id/", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, "GET-entity\n")
+		// TODO: get pk column name
+		rows, err := select2map(db, "select * from "+c.Param("collection")+
+			"where id="+c.Param("id"))
+		if err != nil {
+			return err
+		}
+		return c.JSON(http.StatusOK, rows)
 	})
 	e.PUT("/:collection/:id/", func(c echo.Context) error {
 		return c.JSON(http.StatusCreated, "UPDATE-entity\n")
