@@ -1,12 +1,12 @@
 package main
 
 import (
-	"database/sql"
 	"flag"
 	"fmt"
 	"net/http"
 	"strconv"
 
+	"github.com/ekalinin/darest/dbapi"
 	_ "github.com/lib/pq"
 
 	"github.com/labstack/echo"
@@ -22,44 +22,6 @@ var dbName = flag.String("db-dbname", "template0", "Database name")
 
 var port = flag.Int("port", 7788, "Public http port")
 
-func select2map(db *sql.DB, query string) ([]map[string]interface{}, error) {
-	tableData := make([]map[string]interface{}, 0)
-
-	rows, err := db.Query(query)
-	if err != nil {
-		return tableData, err
-	}
-	defer rows.Close()
-	columns, err := rows.Columns()
-	if err != nil {
-		return tableData, err
-	}
-	count := len(columns)
-	values := make([]interface{}, count)
-	valuePtrs := make([]interface{}, count)
-	for rows.Next() {
-		for i := 0; i < count; i++ {
-			valuePtrs[i] = &values[i]
-		}
-		rows.Scan(valuePtrs...)
-		entry := make(map[string]interface{})
-		for i, col := range columns {
-			var v interface{}
-			val := values[i]
-			b, ok := val.([]byte)
-			if ok {
-				v = string(b)
-			} else {
-				v = val
-			}
-			entry[col] = v
-		}
-		tableData = append(tableData, entry)
-	}
-	return tableData, nil
-
-}
-
 func main() {
 
 	flag.Parse()
@@ -67,7 +29,7 @@ func main() {
 	connString := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		*dbHost, *dbPort, *dbUser, *dbPass, *dbName)
 
-	db, err := sql.Open("postgres", connString)
+	db, err := dbapi.NewPostgres(connString)
 	defer db.Close()
 
 	if err != nil {
@@ -84,10 +46,7 @@ func main() {
 
 	// meta
 	e.OPTIONS("/", func(c echo.Context) error {
-		rows, err := select2map(db,
-			"SELECT table_name as name, table_type as type "+
-				"FROM information_schema.tables "+
-				" WHERE table_schema = 'public'")
+		rows, err := db.GetTables()
 		if err != nil {
 			return err
 		}
@@ -96,7 +55,7 @@ func main() {
 
 	// collection level
 	e.GET("/:collection/", func(c echo.Context) error {
-		rows, err := select2map(db, "select * from "+c.Param("collection"))
+		rows, err := dbapi.GetEntities(c.Param("collection"))
 		if err != nil {
 			return err
 		}
@@ -109,12 +68,7 @@ func main() {
 		}
 		// TODO: select column list for pk
 		resp.Pkey = []string{"id"}
-		resp.Columns, err = select2map(db, "select column_name as name, "+
-			"ordinal_position as position, column_default as default, "+
-			"is_nullable as nullable, data_type as type, "+
-			"is_updatable as updatable "+
-			"from information_schema.columns "+
-			" where table_name = '"+c.Param("collection")+"'")
+		resp.Columns, err = db.GetTableMeta(c.Param("collection"))
 		if err != nil {
 			return err
 		}
@@ -127,8 +81,7 @@ func main() {
 	// entity level
 	e.GET("/:collection/:id/", func(c echo.Context) error {
 		// TODO: get pk column name
-		rows, err := select2map(db, "select * from "+c.Param("collection")+
-			"where id="+c.Param("id"))
+		rows, err := dbapi.GetEntity(c.Param("collection"), c.Param("id"))
 		if err != nil {
 			return err
 		}
